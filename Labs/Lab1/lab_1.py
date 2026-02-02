@@ -12,9 +12,9 @@ JOINT_NAME_LEAD = "leg_front_r_3"
 
 ####
 ####
-KP = 0.0  # YOUR KP VALUE
-KI = 0.0 # YOUR KI VALUE
-KD = 0.0  # YOUR KD VALUE
+KP = 0.9 # YOUR KP VALUE
+KI = 0.05 # YOUR KI VALUE
+KD = 0.07  # YOUR KD VALUE
 ####
 ####
 LOOP_RATE = 200  # Hz
@@ -22,7 +22,7 @@ DELTA_T = 1 / LOOP_RATE
 MAX_TORQUE = 2.0
 DEAD_BAND_SIZE = 0.095
 PENDULUM_CONTROL = False
-LEG_TRACKING_CONTROL = False
+LEG_TRACKING_CONTROL = not PENDULUM_CONTROL
 
 
 class JointStateSubscriber(Node):
@@ -47,6 +47,7 @@ class JointStateSubscriber(Node):
         self.joint_vel_lead = 0
         self.target_joint_pos = 0
         self.target_joint_vel = 0
+        self.sum_joint_error = 0
         # self.torque_history = deque(maxlen=DELAY)
 
         # Create a timer to run control_loop at the specified frequency
@@ -67,15 +68,19 @@ class JointStateSubscriber(Node):
 
         return torque
 
+    def calculate_torque_for_leg_tracking_control(self, error):
+        self.sum_joint_error += error
+        self.sum_joint_error = np.clip(self.sum_joint_error, -0.3, 0.3)
+        return self.sum_joint_error
+
     def calculate_torque_for_leg_tracking(self, joint_pos, joint_vel, target_joint_pos, target_joint_vel):
-        ####
-        #### YOUR CODE HERE
-        ####
-        torque = 0
+        error = target_joint_pos - joint_pos
+        error_dot = target_joint_vel - joint_vel
 
+        torque = KP * error + KD * error_dot + KI * self.calculate_torque_for_leg_tracking_control(error)
+        
 
-
-        # Leave this code unchanged
+        # Leave this code unchangeds
         if torque > 0:
             torque = max(torque, DEAD_BAND_SIZE)
         elif torque < 0:
@@ -83,11 +88,10 @@ class JointStateSubscriber(Node):
         
         return torque
 
+    
+
     def print_info(self):
-        """Print joint information every 2 control loops"""
-        if True:
-            return
-            
+        """Print joint information every 2 control loops"""      
         if self.print_counter == 0:
             self.get_logger().info(
                 f"Pos: {self.joint_pos:.2f}, Target Pos: {self.target_joint_pos:.2f}, Tor: {self.calculated_torque:.2f}"
